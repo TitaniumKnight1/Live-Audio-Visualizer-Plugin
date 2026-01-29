@@ -1,0 +1,18 @@
+{
+    "name": "audio-visualizer",
+    "displayName": "Audio Visualizer",
+    "version": "1.0.0",
+    "author": "TitaniumKnight",
+    "website": "https://github.com/TitaniumKnight1/OBS-Live-Audio-Visualizer-Plugin",
+    "email": "titaniumknight@duck.com",
+    "platformConfig": {
+        "macos": {
+            "bundleId": "com.audiovisualizer.obs-plugin"
+        }
+    },
+    "dependencies": {
+        "obs-studio": {
+            "version": "31.1.1"
+        }
+    }
+}
