@@ -183,4 +183,4 @@ If you find this plugin useful, consider:
 
 ---
 
-**Project Repository**: https://github.com/TitaniumKnight1/OBS-Live-Audio-Visualizer-Plugin
+**Project Repository**: https://github.com/TitaniumKnight1/Live-Audio-Visualizer-Plugin
