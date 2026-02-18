@@ -56,8 +56,8 @@ A real-time audio-reactive visualizer plugin for OBS Studio that displays dynami
 
 ```powershell
 # Clone the repository
-git clone https://github.com/TitaniumKnight1/OBS-Live-Audio-Visualizer-Plugin.git
-cd OBS-Live-Audio-Visualizer-Plugin
+git clone https://github.com/TitaniumKnight1/Live-Audio-Visualizer-Plugin.git
+cd Live-Audio-Visualizer-Plugin
 
 # Create build directory
 mkdir build_x64
@@ -76,8 +76,8 @@ cmake --build . --config RelWithDebInfo
 #### macOS
 
 ```bash
-git clone https://github.com/TitaniumKnight1/OBS-Live-Audio-Visualizer-Plugin.git
-cd OBS-Live-Audio-Visualizer-Plugin
+git clone https://github.com/TitaniumKnight1/Live-Audio-Visualizer-Plugin.git
+cd Live-Audio-Visualizer-Plugin
 
 mkdir build_macos
 cd build_macos
@@ -88,8 +88,8 @@ cmake --build . --config RelWithDebInfo
 #### Linux
 
 ```bash
-git clone https://github.com/TitaniumKnight1/OBS-Live-Audio-Visualizer-Plugin.git
-cd OBS-Live-Audio-Visualizer-Plugin
+git clone https://github.com/TitaniumKnight1/Live-Audio-Visualizer-Plugin.git
+cd Live-Audio-Visualizer-Plugin
 
 mkdir build_x86_64
 cd build_x86_64
