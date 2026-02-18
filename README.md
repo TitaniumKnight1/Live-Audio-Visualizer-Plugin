@@ -1,4 +1,4 @@
-# OBS Live Audio Visualizer Plugin
+# Live Audio Visualizer Plugin
 
 A real-time audio-reactive visualizer plugin for OBS Studio that displays dynamic bars synchronized with any audio input. Perfect for music streams, podcasts, or any content with audio.
 
