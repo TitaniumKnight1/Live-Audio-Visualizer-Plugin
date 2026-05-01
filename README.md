@@ -99,7 +99,14 @@ ninja
 
 ### GitHub Releases (automated Windows build)
 
-When you **publish** a GitHub Release, the workflow **Release (Windows)** builds `audio-visualizer.dll` and uploads it to that release together with `en-US.ini`. You can also run the workflow manually (**Actions** → **Release (Windows)** → **Run workflow**); optionally set **upload tag** to push assets to an existing release tag.
+When you **publish** a GitHub Release whose **tag points at current `main`**, the workflow **Release (Windows)** builds `audio-visualizer.dll` and uploads it with `en-US.ini`.
+
+**Manual run:** **Actions** → **Release (Windows)** → **Run workflow**.
+
+- **Upload tag:** attach artifacts to an existing release (e.g. `v1.0.1`).
+- **Build ref:** git ref to compile (defaults to **`main`**). Use this when **upload tag** points at an **old commit** that does not contain `.github/scripts/` or `cmake/`—for example tag `v1.0.1` created before CI was added. Then leave **Build ref** as `main` so the DLL matches latest sources while assets attach to the older release.
+
+Publishing a release for an **old tag** (without CI files) still fails on the automatic `release` event; use **workflow_dispatch** with **upload tag** + **build ref** `main`, or cut a **new tag** from `main` for future releases.
 
 ## Usage
 

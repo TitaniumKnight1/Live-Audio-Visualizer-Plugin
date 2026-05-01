@@ -7,9 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       upload_tag:
-        description: "Upload built files to this existing release tag (e.g. v1.0.2). Leave empty to build only."
+        description: "Upload built files to this existing release tag (e.g. v1.0.1). Leave empty to build only."
         required: false
         default: ""
+      build_ref:
+        description: "Git ref to compile (branch, tag, or SHA). Use main for latest CI-capable tree. When upload_tag is set, defaults to main so old release tags (without .github/scripts) still work."
+        required: false
+        default: "main"
 
 permissions:
   contents: write
@@ -33,8 +37,12 @@ jobs:
             "ref=${{ github.event.release.tag_name }}" >> $env:GITHUB_OUTPUT
             "upload_tag=${{ github.event.release.tag_name }}" >> $env:GITHUB_OUTPUT
           } elseif ('${{ inputs.upload_tag }}' -ne '') {
-            "ref=${{ inputs.upload_tag }}" >> $env:GITHUB_OUTPUT
+            # Build from build_ref (usually main): upload_tag may be an older release whose commit lacks CI files.
+            $buildRef = '${{ inputs.build_ref }}'.Trim()
+            if ([string]::IsNullOrWhiteSpace($buildRef)) { $buildRef = 'main' }
+            "ref=$buildRef" >> $env:GITHUB_OUTPUT
             "upload_tag=${{ inputs.upload_tag }}" >> $env:GITHUB_OUTPUT
+            Write-Host "Will build ref: $buildRef and attach artifacts to release: ${{ inputs.upload_tag }}"
           } else {
             "ref=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
             "upload_tag=" >> $env:GITHUB_OUTPUT
@@ -54,7 +62,7 @@ jobs:
           Write-Host "Building from repo root: $root"
           Write-Host "Build script path: $script"
           if (-not (Test-Path -LiteralPath $script)) {
-            Write-Host "::error::Missing build script at expected path. Release tags must point to a commit that includes '.github/scripts/' (tag from current main after CI was added)."
+            Write-Host "::error::Missing .github/scripts (cmake CI was added after this commit). For an existing old release: run workflow_dispatch with upload_tag=<release> and build_ref=main (default). Or publish a new tag from current main."
             if (Test-Path (Join-Path $root '.github')) {
               Get-ChildItem -LiteralPath (Join-Path $root '.github') -Recurse -File | Select-Object -First 40 FullName
             } else {
