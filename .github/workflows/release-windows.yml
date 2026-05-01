@@ -49,7 +49,8 @@ jobs:
         working-directory: ${{ github.workspace }}
         env:
           CI: "true"
-        run: & "${{ github.workspace }}/.github/scripts/Build-Windows.ps1" -Target x64 -Configuration RelWithDebInfo
+        run: |
+          & "${{ github.workspace }}/.github/scripts/Build-Windows.ps1" -Target x64 -Configuration RelWithDebInfo
 
       - name: Stage release files
         run: |
