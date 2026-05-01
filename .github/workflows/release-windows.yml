@@ -1,0 +1,72 @@
+# Build Windows DLL on each published GitHub Release and attach artifacts.
+name: Release (Windows)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      upload_tag:
+        description: "Upload built files to this existing release tag (e.g. v1.0.2). Leave empty to build only."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-windows-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-upload:
+    name: Build and upload Windows artifacts
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Resolve checkout ref
+        id: ref
+        run: |
+          if ('${{ github.event_name }}' -eq 'release') {
+            "ref=${{ github.event.release.tag_name }}" >> $env:GITHUB_OUTPUT
+            "upload_tag=${{ github.event.release.tag_name }}" >> $env:GITHUB_OUTPUT
+          } elseif ('${{ inputs.upload_tag }}' -ne '') {
+            "ref=${{ inputs.upload_tag }}" >> $env:GITHUB_OUTPUT
+            "upload_tag=${{ inputs.upload_tag }}" >> $env:GITHUB_OUTPUT
+          } else {
+            "ref=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+            "upload_tag=" >> $env:GITHUB_OUTPUT
+          }
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.ref.outputs.ref }}
+
+      - name: Build plugin (Windows x64)
+        env:
+          CI: "true"
+        run: .github/scripts/Build-Windows.ps1 -Target x64 -Configuration RelWithDebInfo
+
+      - name: Stage release files
+        run: |
+          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}/release-artifacts" | Out-Null
+          $dll = "${{ github.workspace }}/build_x64/RelWithDebInfo/audio-visualizer.dll"
+          if (-not (Test-Path $dll)) { throw "Expected DLL not found: $dll" }
+          Copy-Item $dll "${{ github.workspace }}/release-artifacts/audio-visualizer.dll"
+          Copy-Item "${{ github.workspace }}/data/locale/en-US.ini" "${{ github.workspace }}/release-artifacts/en-US.ini"
+
+      - name: Upload to GitHub Release
+        if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.upload_tag != '') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ steps.ref.outputs.upload_tag }}"
+          if (-not $tag) { throw "No release tag resolved for upload." }
+          gh release upload $tag `
+            "${{ github.workspace }}/release-artifacts/audio-visualizer.dll" `
+            "${{ github.workspace }}/release-artifacts/en-US.ini" `
+            --clobber `
+            --repo "${{ github.repository }}"

@@ -97,6 +97,10 @@ cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
 ninja
 ```
 
+### GitHub Releases (automated Windows build)
+
+When you **publish** a GitHub Release, the workflow **Release (Windows)** builds `audio-visualizer.dll` and uploads it to that release together with `en-US.ini`. You can also run the workflow manually (**Actions** → **Release (Windows)** → **Run workflow**); optionally set **upload tag** to push assets to an existing release tag.
+
 ## Usage
 
 1. Open OBS Studio

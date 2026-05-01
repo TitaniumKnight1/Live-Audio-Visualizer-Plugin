@@ -3,6 +3,7 @@
 
 # Except for default project files
 !/.github
+!/.github/**
 !/build-aux
 !/cmake
 !/data
@@ -16,6 +17,7 @@
 !LICENSE
 !README.md
 !INSTALL.md
+!install-plugin.ps1
 
 # Exclude lock files
 *.lock.json
@@ -25,3 +27,6 @@
 
 # Exclude CMake build number cache
 /cmake/.CMakeBuildNumber
+
+# Downloaded by CMake dependency scripts (CI / local)
+/.deps/
