@@ -12,7 +12,7 @@ Follow these simple steps to install the plugin on Windows:
    - `audio-visualizer.dll`
    - `en-US.ini`
 
-### Step 2: Navigate to Your OBS Plugin Folder
+### Step 2: Install the DLL (binary)
 
 **Windows users:**
 
@@ -23,37 +23,41 @@ Follow these simple steps to install the plugin on Windows:
    ```
 3. Press Enter
 
-This will open your OBS plugins folder. Keep this window open.
+Drag and drop `audio-visualizer.dll` into this folder (alongside other plugin `.dll` files).
 
-### Step 3: Place the DLL File
+### Step 3: Install the locale file (menu / property names)
 
-1. In the folder that opened, look for other `.dll` files
-2. Drag and drop `audio-visualizer.dll` into this folder
+OBS loads translated strings from the plugin **data** folder, **not** from the `64bit` folder.
 
-### Step 4: Create the Locale Folder and Place the INI File
+1. Press `Win + R` again and open:
+   ```
+   C:\Program Files\obs-studio\data\obs-plugins
+   ```
+2. Create a folder named exactly: `audio-visualizer`
+3. Inside it, create a folder named exactly: `locale`
+4. Copy `en-US.ini` into:
+   ```
+   C:\Program Files\obs-studio\data\obs-plugins\audio-visualizer\locale\en-US.ini
+   ```
 
-1. In the same plugins folder (`C:\Program Files\obs-studio\obs-plugins\64bit`), **right-click** in empty space
-2. Select **New** → **Folder**
-3. Name the folder exactly: `audio-visualizer`
-4. **Double-click** the new `audio-visualizer` folder to open it
-5. **Right-click** in empty space again
-6. Select **New** → **Folder**
-7. Name this folder exactly: `locale`
-8. **Double-click** the `locale` folder to open it
-9. Drag and drop `en-US.ini` into this `locale` folder
+**Portable OBS:** use `<your OBS folder>\data\obs-plugins\audio-visualizer\locale\en-US.ini` instead.
 
-**Your folder structure should look like this:**
+**Your layout should look like this:**
+
 ```
-C:\Program Files\obs-studio\obs-plugins\64bit\
-├── audio-visualizer.dll
-└── audio-visualizer\         (folder you created)
-    └── locale\              (folder you created)
-        └── en-US.ini        (file you placed here)
+C:\Program Files\obs-studio\
+├── obs-plugins\64bit\
+│   └── audio-visualizer.dll
+└── data\obs-plugins\audio-visualizer\
+    └── locale\
+        └── en-US.ini
 ```
 
-### Step 5: Restart OBS
+If `en-US.ini` is missing or in the wrong directory, OBS shows keys such as `KickViz.SourceName` instead of human-readable labels. Putting the file under `obs-plugins\64bit\...\locale` does **not** work.
 
-1. **Close OBS completely** (if it's open)
+### Step 4: Restart OBS
+
+1. **Close OBS completely** (if it is open)
 2. **Open OBS Studio again**
 3. The plugin is now installed!
 
@@ -72,8 +76,7 @@ C:\Program Files\obs-studio\obs-plugins\64bit\
 **Solution:**
 - Make sure you have OBS Studio **31.1.1 or newer**
 - Check that the DLL is in: `C:\Program Files\obs-studio\obs-plugins\64bit\`
-- Verify the folder structure is correct (audio-visualizer → locale → en-US.ini)
-- Try restarting your computer, then restart OBS
+- Restart OBS after installation
 
 ### Audio isn't showing
 
@@ -82,19 +85,20 @@ C:\Program Files\obs-studio\obs-plugins\64bit\
 - Check that audio is actually playing
 - Try increasing the "Sensitivity" slider in the plugin settings
 
-### Text labels are missing in settings
+### Text labels are missing or show `KickViz.*` keys
 
 **Solution:**
-- Make sure `en-US.ini` is in the correct folder path:
+- Install `en-US.ini` under the **data** path (see Step 3), for example:
   ```
-  C:\Program Files\obs-studio\obs-plugins\64bit\audio-visualizer\locale\en-US.ini
+  C:\Program Files\obs-studio\data\obs-plugins\audio-visualizer\locale\en-US.ini
   ```
+- If OBS is set to a language other than English, it still falls back to `en-US.ini` when no matching file exists—as long as that file is in this folder.
 
 ## Need Help?
 
-If you're still having issues:
-1. Check that you're using the **latest version** of OBS Studio
-2. Verify all files are in the correct locations
+If you are still having issues:
+1. Check that you are using the **latest version** of OBS Studio
+2. Verify the DLL and locale paths above
 3. Open an issue on [GitHub](https://github.com/TitaniumKnight1/OBS-Live-Audio-Visualizer-Plugin/issues)
 
 ## For Advanced Users / Developers

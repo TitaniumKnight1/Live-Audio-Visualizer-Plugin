@@ -5,19 +5,33 @@
 #include <util/platform.h>
 #include <util/dstr.h>
 #include <algorithm>
+#include <cmath>
 
 static const char *T_(const char *k) { return obs_module_text(k); }
 
 // ---------- helpers ----------
 static inline float clampf(float v, float lo, float hi) { return std::max(lo, std::min(hi, v)); }
 
-static inline vec4 rgba_u32_to_vec4(uint32_t rgba)
+/** OBS color properties store uint32 as packed RGBA with R in the low byte (same as vec4_from_rgba). */
+static inline vec4 kickviz_obs_color_to_vec4(uint32_t rgba)
 {
-  float r = float((rgba >> 24) & 0xFF) / 255.0f;
-  float g = float((rgba >> 16) & 0xFF) / 255.0f;
-  float b = float((rgba >> 8)  & 0xFF) / 255.0f;
-  float a = float((rgba)       & 0xFF) / 255.0f;
-  return {r,g,b,a};
+  vec4 v;
+  v.x = float((rgba >> 0) & 0xFF) / 255.0f;
+  v.y = float((rgba >> 8) & 0xFF) / 255.0f;
+  v.z = float((rgba >> 16) & 0xFF) / 255.0f;
+  v.w = float((rgba >> 24) & 0xFF) / 255.0f;
+  return v;
+}
+
+static inline vec4 kickviz_lerp_vec4(const vec4 &a, const vec4 &b, float t)
+{
+  t = clampf(t, 0.0f, 1.0f);
+  vec4 o;
+  o.x = a.x + (b.x - a.x) * t;
+  o.y = a.y + (b.y - a.y) * t;
+  o.z = a.z + (b.z - a.z) * t;
+  o.w = a.w + (b.w - a.w) * t;
+  return o;
 }
 
 static inline uint32_t get_color_u32(obs_data_t *s, const char *key, uint32_t defv)
@@ -92,11 +106,12 @@ static void kickviz_get_defaults(obs_data_t *settings)
   obs_data_set_default_string(settings, "audio_source_name", "(none)");
   obs_data_set_default_int(settings, "mode", 0);
   obs_data_set_default_int(settings, "shape", 1);
+  obs_data_set_default_int(settings, "freq_range", 1);
 
   obs_data_set_default_int(settings, "color", 0xFFFFFFFF);
   obs_data_set_default_int(settings, "bg_color", 0x00000000);
   obs_data_set_default_bool(settings, "use_gradient", false);
-  obs_data_set_default_int(settings, "color2", 0xFF00FFFF);
+  obs_data_set_default_int(settings, "color2", 0xFFFF00FF);
 
   obs_data_set_default_double(settings, "sensitivity", 1.25);
   obs_data_set_default_double(settings, "smoothing", 0.55);
@@ -153,7 +168,7 @@ static void kickviz_update(void *data, obs_data_t *settings)
   st->S.color = get_color_u32(settings, "color", 0xFFFFFFFF);
   st->S.bg_color = get_color_u32(settings, "bg_color", 0x00000000);
   st->S.use_gradient = obs_data_get_bool(settings, "use_gradient");
-  st->S.color2 = get_color_u32(settings, "color2", 0xFF00FFFF);
+  st->S.color2 = get_color_u32(settings, "color2", 0xFFFF00FF);
 
   st->S.magnitude   = (float)obs_data_get_double(settings, "magnitude");
   st->S.sensitivity = (float)obs_data_get_double(settings, "sensitivity");
@@ -325,13 +340,11 @@ static void compute_bins(KickVizState *st, int bars)
   }
 }
 
-static void draw_color_rect(gs_effect_t *effect, float x, float y, float w, float h, uint32_t color)
+static void draw_color_rect_vec4(gs_effect_t *effect, float x, float y, float w, float h, vec4 colorVec)
 {
   gs_eparam_t *colorParam = gs_effect_get_param_by_name(effect, "color");
-  if (colorParam) {
-    vec4 colorVec = rgba_u32_to_vec4(color);
+  if (colorParam)
     gs_effect_set_vec4(colorParam, &colorVec);
-  }
 
   gs_matrix_push();
   gs_matrix_translate3f(x, y, 0.0f);
@@ -341,6 +354,72 @@ static void draw_color_rect(gs_effect_t *effect, float x, float y, float w, floa
   }
 
   gs_matrix_pop();
+}
+
+static void draw_color_rect(gs_effect_t *effect, float x, float y, float w, float h, uint32_t color)
+{
+  vec4 colorVec = kickviz_obs_color_to_vec4(color);
+  draw_color_rect_vec4(effect, x, y, w, h, colorVec);
+}
+
+/** Large Y = color_bottom, small Y (y_top) = color_top. */
+static void draw_vertical_gradient_rect(gs_effect_t *effect, float x, float y_top, float w, float h,
+                                        uint32_t color_bottom, uint32_t color_top)
+{
+  if (h <= 1.0f) {
+    draw_color_rect(effect, x, y_top, w, h, color_bottom);
+    return;
+  }
+  vec4 vb = kickviz_obs_color_to_vec4(color_bottom);
+  vec4 vt = kickviz_obs_color_to_vec4(color_top);
+  int slices = (int)std::lround(std::ceil((double)h / 4.0));
+  slices = std::max(4, std::min(64, slices));
+  float slice_h = h / (float)slices;
+  for (int s = 0; s < slices; s++) {
+    float tm = (float(s) + 0.5f) / float(slices);
+    vec4 vc = kickviz_lerp_vec4(vb, vt, tm);
+    float sy = y_top + h - float(s + 1) * slice_h;
+    draw_color_rect_vec4(effect, x, sy, w, slice_h + 0.5f, vc);
+  }
+}
+
+static void kickviz_fill_vertical_bar(gs_effect_t *effect, float x, float bar_top, float w, float bar_h,
+                                      const KickVizSettings &S)
+{
+  if (bar_h <= 0.0f)
+    return;
+  if (!S.use_gradient) {
+    draw_color_rect(effect, x, bar_top, w, bar_h, S.color);
+    return;
+  }
+  draw_vertical_gradient_rect(effect, x, bar_top, w, bar_h, S.color, S.color2);
+}
+
+/** Canvas bottom at canvas_bottom_y; bar fills upward to bar_top_y. Sample at y_sample (vertical axis). */
+static vec4 kickviz_bar_gradient_vec4(const KickVizSettings &S, float canvas_bottom_y, float bar_top_y,
+                                      float y_sample)
+{
+  if (!S.use_gradient)
+    return kickviz_obs_color_to_vec4(S.color);
+  float bar_h = canvas_bottom_y - bar_top_y;
+  if (bar_h <= 1e-4f)
+    return kickviz_obs_color_to_vec4(S.color);
+  float t = (canvas_bottom_y - y_sample) / bar_h;
+  return kickviz_lerp_vec4(kickviz_obs_color_to_vec4(S.color), kickviz_obs_color_to_vec4(S.color2),
+                           clampf(t, 0.0f, 1.0f));
+}
+
+/** Radial bar local Y: inner_y toward circle base, outer_y toward tip. */
+static vec4 kickviz_radial_gradient_vec4(const KickVizSettings &S, float inner_y, float outer_y, float y_sample)
+{
+  if (!S.use_gradient)
+    return kickviz_obs_color_to_vec4(S.color);
+  float span = outer_y - inner_y;
+  if (span <= 1e-4f)
+    return kickviz_obs_color_to_vec4(S.color);
+  float t = (y_sample - inner_y) / span;
+  return kickviz_lerp_vec4(kickviz_obs_color_to_vec4(S.color), kickviz_obs_color_to_vec4(S.color2),
+                           clampf(t, 0.0f, 1.0f));
 }
 
 static void kickviz_video_render(void *data, gs_effect_t *effect_unused)
@@ -389,101 +468,124 @@ static void kickviz_video_render(void *data, gs_effect_t *effect_unused)
     int shape = st->S.shape;
 
     if (st->S.mode == 0) {
+      float barTop = maxH - barH;
       if (shape == 3) {
         float dot = std::max(2.0f, bw * 0.35f);
         float step = dot * 2.0f + 2.0f;
         int numDots = (int)(barH / step);
         for (int d = 0; d < numDots; d++) {
           float dotY = maxH - (d + 1) * step;
-          draw_color_rect(solid, x + (bw - dot*2.0f)/2.0f, dotY, dot*2.0f, dot*2.0f, st->S.color);
+          vec4 dc = kickviz_bar_gradient_vec4(st->S, maxH, barTop, dotY + dot);
+          draw_color_rect_vec4(solid, x + (bw - dot * 2.0f) / 2.0f, dotY, dot * 2.0f, dot * 2.0f, dc);
         }
       } else if (shape == 4) {
-          float lineY = maxH - barH;
-          draw_color_rect(solid, x, lineY, bw, 2.0f, st->S.color);
+        float lineY = maxH - barH;
+        vec4 lc = kickviz_bar_gradient_vec4(st->S, maxH, barTop, lineY + 1.0f);
+        draw_color_rect_vec4(solid, x, lineY, bw, 2.0f, lc);
       } else {
         float inset = (shape == 0) ? 0.0f : std::max(0.0f, bw * 0.06f);
-        if (shape == 2) inset = bw * 0.2f;
+        if (shape == 2)
+          inset = bw * 0.2f;
 
-        float barTop = maxH - barH;
-        draw_color_rect(solid, x + inset, barTop, std::max(1.0f, bw - inset*2.0f), barH, st->S.color);
+        kickviz_fill_vertical_bar(solid, x + inset, barTop, std::max(1.0f, bw - inset * 2.0f), barH,
+                                  st->S);
       }
 
       if (st->peaks[i] > 0.01f) {
         float peakH = st->peaks[i] * maxH * magnitude;
         float capY = maxH - peakH;
         capY = clampf(capY, 0.0f, maxH - 2.0f);
-        draw_color_rect(solid, x, capY, bw, 2.0f, st->S.color);
+        float peakBarTop = maxH - peakH;
+        vec4 cc = kickviz_bar_gradient_vec4(st->S, maxH, peakBarTop, capY + 1.0f);
+        draw_color_rect_vec4(solid, x, capY, bw, 2.0f, cc);
       }
 
       x += (bw + gap);
-      if (x > (float)W) break;
+      if (x > (float)W)
+        break;
     }
     else if (st->S.mode == 1) {
-        float rX = centerX + (i * (bw + gap));
-        float lX = centerX - ((i + 1) * (bw + gap));
+      float rX = centerX + (i * (bw + gap));
+      float lX = centerX - ((i + 1) * (bw + gap));
 
-        if (rX > (float)W) break;
+      if (rX > (float)W)
+        break;
 
-        if (shape == 3) {
-            float dot = std::max(2.0f, bw * 0.35f);
-            float step = dot * 2.0f + 2.0f;
-            int numDots = (int)(barH / step);
-            for (int d = 0; d < numDots; d++) {
-                float dotY = maxH - (d + 1) * step;
-                draw_color_rect(solid, rX + (bw - dot*2.0f)/2.0f, dotY, dot*2.0f, dot*2.0f, st->S.color);
-                draw_color_rect(solid, lX + (bw - dot*2.0f)/2.0f, dotY, dot*2.0f, dot*2.0f, st->S.color);
-            }
-        } else if (shape == 4) {
-             float lineY = maxH - barH;
-             draw_color_rect(solid, rX, lineY, bw, 2.0f, st->S.color);
-             draw_color_rect(solid, lX, lineY, bw, 2.0f, st->S.color);
-        } else {
-            float inset = (shape == 0) ? 0.0f : std::max(0.0f, bw * 0.06f);
-            float barTop = maxH - barH;
-            draw_color_rect(solid, rX + inset, barTop, std::max(1.0f, bw - inset*2.0f), barH, st->S.color);
-            draw_color_rect(solid, lX + inset, barTop, std::max(1.0f, bw - inset*2.0f), barH, st->S.color);
+      float barTop = maxH - barH;
+
+      if (shape == 3) {
+        float dot = std::max(2.0f, bw * 0.35f);
+        float step = dot * 2.0f + 2.0f;
+        int numDots = (int)(barH / step);
+        for (int d = 0; d < numDots; d++) {
+          float dotY = maxH - (d + 1) * step;
+          vec4 dc = kickviz_bar_gradient_vec4(st->S, maxH, barTop, dotY + dot);
+          draw_color_rect_vec4(solid, rX + (bw - dot * 2.0f) / 2.0f, dotY, dot * 2.0f, dot * 2.0f, dc);
+          draw_color_rect_vec4(solid, lX + (bw - dot * 2.0f) / 2.0f, dotY, dot * 2.0f, dot * 2.0f, dc);
         }
+      } else if (shape == 4) {
+        float lineY = maxH - barH;
+        vec4 lc = kickviz_bar_gradient_vec4(st->S, maxH, barTop, lineY + 1.0f);
+        draw_color_rect_vec4(solid, rX, lineY, bw, 2.0f, lc);
+        draw_color_rect_vec4(solid, lX, lineY, bw, 2.0f, lc);
+      } else {
+        float inset = (shape == 0) ? 0.0f : std::max(0.0f, bw * 0.06f);
+        if (shape == 2)
+          inset = bw * 0.2f;
+        float bwFill = std::max(1.0f, bw - inset * 2.0f);
+        kickviz_fill_vertical_bar(solid, rX + inset, barTop, bwFill, barH, st->S);
+        kickviz_fill_vertical_bar(solid, lX + inset, barTop, bwFill, barH, st->S);
+      }
 
-        if (st->peaks[i] > 0.01f) {
-            float peakH = st->peaks[i] * maxH * magnitude;
-            float capY = maxH - peakH;
-            capY = clampf(capY, 0.0f, maxH - 2.0f);
-            draw_color_rect(solid, rX, capY, bw, 2.0f, st->S.color);
-            draw_color_rect(solid, lX, capY, bw, 2.0f, st->S.color);
-        }
+      if (st->peaks[i] > 0.01f) {
+        float peakH = st->peaks[i] * maxH * magnitude;
+        float capY = maxH - peakH;
+        capY = clampf(capY, 0.0f, maxH - 2.0f);
+        float peakBarTop = maxH - peakH;
+        vec4 cc = kickviz_bar_gradient_vec4(st->S, maxH, peakBarTop, capY + 1.0f);
+        draw_color_rect_vec4(solid, rX, capY, bw, 2.0f, cc);
+        draw_color_rect_vec4(solid, lX, capY, bw, 2.0f, cc);
+      }
     }
     else if (st->S.mode == 2) {
-        float angleStep = 6.28318f / (float)bars;
-        float angle = i * angleStep - 1.5708f;
+      float angleStep = 6.28318f / (float)bars;
+      float angle = i * angleStep - 1.5708f;
 
-        float cosA = cosf(angle);
-        float sinA = sinf(angle);
+      float cosA = cosf(angle);
+      float sinA = sinf(angle);
 
-        float sX = centerX + radius * cosA;
-        float sY = centerY + radius * sinA;
+      float sX = centerX + radius * cosA;
+      float sY = centerY + radius * sinA;
 
-        float val = std::max(0.025f, st->smooth[i]);
-        float v_rad = val * magnitude * 0.5f;
-        float curRadius = radius + (maxRadius - radius) * v_rad;
+      float val = std::max(0.025f, st->smooth[i]);
+      float v_rad = val * magnitude * 0.5f;
+      float curRadius = radius + (maxRadius - radius) * v_rad;
 
-        gs_matrix_push();
-        gs_matrix_translate3f(sX, sY, 0.0f);
-        gs_matrix_rotaa4f(0.0f, 0.0f, 1.0f, angle - 1.570796f);
+      gs_matrix_push();
+      gs_matrix_translate3f(sX, sY, 0.0f);
+      gs_matrix_rotaa4f(0.0f, 0.0f, 1.0f, angle - 1.570796f);
 
-        float radBarH = curRadius - radius;
+      float radBarH = curRadius - radius;
+      const float inner_y = -1.0f;
+      const float outer_y = radBarH;
 
-        if (shape == 3) {
-             float dot = std::max(2.0f, bw * 0.35f);
-             float step = dot * 2.0f + 2.0f;
-             int numDots = (int)(radBarH / step);
-             for(int d=0; d<numDots; d++) {
-                 draw_color_rect(solid, -dot, d*step, dot*2.0f, dot*2.0f, st->S.color);
-             }
-        } else {
-             draw_color_rect(solid, -bw/2.0f, -1.0f, bw, radBarH + 1.0f, st->S.color);
+      if (shape == 3) {
+        float dot = std::max(2.0f, bw * 0.35f);
+        float step = dot * 2.0f + 2.0f;
+        int numDots = (int)(radBarH / step);
+        for (int d = 0; d < numDots; d++) {
+          vec4 dc = kickviz_radial_gradient_vec4(st->S, inner_y, outer_y, d * step + dot);
+          draw_color_rect_vec4(solid, -dot, d * step, dot * 2.0f, dot * 2.0f, dc);
         }
+      } else {
+        float bar_thick = radBarH + 1.0f;
+        if (!st->S.use_gradient || bar_thick <= 1.0f)
+          draw_color_rect(solid, -bw / 2.0f, -1.0f, bw, bar_thick, st->S.color);
+        else
+          draw_vertical_gradient_rect(solid, -bw / 2.0f, -1.0f, bw, bar_thick, st->S.color2, st->S.color);
+      }
 
-        gs_matrix_pop();
+      gs_matrix_pop();
     }
   }
 

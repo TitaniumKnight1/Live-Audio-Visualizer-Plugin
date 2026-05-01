@@ -40,11 +40,11 @@ A real-time audio-reactive visualizer plugin for OBS Studio that displays dynami
    C:\Program Files\obs-studio\obs-plugins\64bit\
    ```
 
-3. Create folder structure and copy `en-US.ini` to:
+3. Copy `en-US.ini` into the plugin **data** folder (OBS does not read locale files next to the DLL):
    ```
-   C:\Program Files\obs-studio\obs-plugins\64bit\audio-visualizer\locale\en-US.ini
+   C:\Program Files\obs-studio\data\obs-plugins\audio-visualizer\locale\en-US.ini
    ```
-   (Create the `audio-visualizer` and `locale` folders if they don't exist)
+   Create the `audio-visualizer` and `locale` folders if needed. For portable installs, use `<OBS folder>\data\obs-plugins\...`.
 
 4. Restart OBS Studio
 
@@ -140,7 +140,7 @@ ninja
 **Plugin doesn't load:**
 - Ensure OBS Studio version is 31.1.1 or later
 - Check that the DLL is in the correct plugins directory
-- Verify the folder structure is correct: `audio-visualizer\locale\en-US.ini`
+- Verify locale path: `data\obs-plugins\audio-visualizer\locale\en-US.ini` under your OBS install (see Installation)
 - Restart OBS after installation
 
 **Audio not showing:**
@@ -152,8 +152,8 @@ ninja
 - Reduce smoothing value or increase decay
 - Lower the bar count by increasing gap/width
 
-**Text labels are missing in settings:**
-- Ensure `en-US.ini` is in: `C:\Program Files\obs-studio\obs-plugins\64bit\audio-visualizer\locale\en-US.ini`
+**Text labels are missing or show `KickViz.*`:**
+- Ensure `en-US.ini` is in: `C:\Program Files\obs-studio\data\obs-plugins\audio-visualizer\locale\en-US.ini` (not under `obs-plugins\64bit`)
 
 ## Contributing
 

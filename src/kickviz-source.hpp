@@ -12,10 +12,11 @@ struct KickVizSettings {
   int shape = 0;          // 0=Square, 1=Rounded, 2=Capsule, 3=Dots, 4=Line
   int freq_range = 1;     // 0=Bass(LowDetail), 1=Standard, 2=Wide, 3=Full
 
-  uint32_t color = 0xFFFFFFFF;   // RGBA
+  // Packed as OBS/UI color: 0xAABBGGRR (see libobs vec4_from_rgba)
+  uint32_t color = 0xFFFFFFFF;
   uint32_t bg_color = 0x00000000;
   bool use_gradient = false;
-  uint32_t color2 = 0xFF00FFFF;
+  uint32_t color2 = 0xFFFF00FF;
 
   float magnitude = 1.0f;        // height multiplier (default 1.0)
   float sensitivity = 1.25f;     // multiplier
