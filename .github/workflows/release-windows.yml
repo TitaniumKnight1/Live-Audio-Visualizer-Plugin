@@ -46,9 +46,10 @@ jobs:
           ref: ${{ steps.ref.outputs.ref }}
 
       - name: Build plugin (Windows x64)
+        working-directory: ${{ github.workspace }}
         env:
           CI: "true"
-        run: .github/scripts/Build-Windows.ps1 -Target x64 -Configuration RelWithDebInfo
+        run: & "${{ github.workspace }}/.github/scripts/Build-Windows.ps1" -Target x64 -Configuration RelWithDebInfo
 
       - name: Stage release files
         run: |
