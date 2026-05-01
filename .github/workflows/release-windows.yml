@@ -46,19 +46,34 @@ jobs:
           ref: ${{ steps.ref.outputs.ref }}
 
       - name: Build plugin (Windows x64)
-        working-directory: ${{ github.workspace }}
         env:
           CI: "true"
         run: |
-          & "${{ github.workspace }}/.github/scripts/Build-Windows.ps1" -Target x64 -Configuration RelWithDebInfo
+          $root = [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          $script = [System.IO.Path]::GetFullPath((Join-Path $root '.github\scripts\Build-Windows.ps1'))
+          Write-Host "Building from repo root: $root"
+          Write-Host "Build script path: $script"
+          if (-not (Test-Path -LiteralPath $script)) {
+            Write-Host "::error::Missing build script at expected path. Release tags must point to a commit that includes '.github/scripts/' (tag from current main after CI was added)."
+            if (Test-Path (Join-Path $root '.github')) {
+              Get-ChildItem -LiteralPath (Join-Path $root '.github') -Recurse -File | Select-Object -First 40 FullName
+            } else {
+              Write-Host "No .github directory in checkout."
+            }
+            exit 1
+          }
+          pwsh -NoProfile -File $script -Target x64 -Configuration RelWithDebInfo
 
       - name: Stage release files
         run: |
-          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}/release-artifacts" | Out-Null
-          $dll = "${{ github.workspace }}/build_x64/RelWithDebInfo/audio-visualizer.dll"
-          if (-not (Test-Path $dll)) { throw "Expected DLL not found: $dll" }
-          Copy-Item $dll "${{ github.workspace }}/release-artifacts/audio-visualizer.dll"
-          Copy-Item "${{ github.workspace }}/data/locale/en-US.ini" "${{ github.workspace }}/release-artifacts/en-US.ini"
+          $root = [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          New-Item -ItemType Directory -Force -Path (Join-Path $root 'release-artifacts') | Out-Null
+          $dll = Join-Path $root 'build_x64\RelWithDebInfo\audio-visualizer.dll'
+          $dll = [System.IO.Path]::GetFullPath($dll)
+          if (-not (Test-Path -LiteralPath $dll)) { throw "Expected DLL not found: $dll" }
+          Copy-Item -LiteralPath $dll (Join-Path $root 'release-artifacts\audio-visualizer.dll')
+          $ini = Join-Path $root 'data\locale\en-US.ini'
+          Copy-Item -LiteralPath ([System.IO.Path]::GetFullPath($ini)) (Join-Path $root 'release-artifacts\en-US.ini')
 
       - name: Upload to GitHub Release
         if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.upload_tag != '') }}
@@ -67,8 +82,9 @@ jobs:
         run: |
           $tag = "${{ steps.ref.outputs.upload_tag }}"
           if (-not $tag) { throw "No release tag resolved for upload." }
+          $root = [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
           gh release upload $tag `
-            "${{ github.workspace }}/release-artifacts/audio-visualizer.dll" `
-            "${{ github.workspace }}/release-artifacts/en-US.ini" `
+            (Join-Path $root 'release-artifacts\audio-visualizer.dll') `
+            (Join-Path $root 'release-artifacts\en-US.ini') `
             --clobber `
             --repo "${{ github.repository }}"
